@@ -39,6 +39,8 @@ st.markdown("<h1 class='main-title'>🌶️ Chilly Yard Manager</h1>", unsafe_al
 # Initialize session state
 if 'today_data' not in st.session_state:
     st.session_state.today_data = load_today_data()
+    # Save to persist any migrations
+    save_today_data(st.session_state.today_data)
 
 # Sidebar for navigation
 st.sidebar.title("Navigation")
@@ -154,10 +156,17 @@ if page == "Today's Operations":
             st.markdown("### 📋 Today's Purchases")
             purchase_df = pd.DataFrame(st.session_state.today_data['purchase'])
             
-            # Reorder columns for better display
-            display_cols = ['farmer_name', 'farmer_phone', 'mirchi_grade', 'num_bags', 'weight_per_bag', 'total_weight', 'price_per_kg', 'amount', 'timestamp']
-            display_df = purchase_df[display_cols].copy()
-            display_df.columns = ['Name', 'Phone', 'Grade', 'Bags', 'Wt/Bag (kg)', 'Total Wt (kg)', 'Price/kg (₹)', 'Amount (₹)', 'Time']
+            # Check if new format (has mirchi_grade) or old format (has quantity)
+            if 'mirchi_grade' in purchase_df.columns:
+                # New format
+                display_cols = ['farmer_name', 'farmer_phone', 'mirchi_grade', 'num_bags', 'weight_per_bag', 'total_weight', 'price_per_kg', 'amount', 'timestamp']
+                display_df = purchase_df[display_cols].copy()
+                display_df.columns = ['Name', 'Phone', 'Grade', 'Bags', 'Wt/Bag (kg)', 'Total Wt (kg)', 'Price/kg (₹)', 'Amount (₹)', 'Time']
+            else:
+                # Old format fallback
+                display_cols = ['farmer_name', 'farmer_phone', 'quantity', 'price_per_unit', 'amount', 'timestamp']
+                display_df = purchase_df[display_cols].copy()
+                display_df.columns = ['Name', 'Phone', 'Qty (kg)', 'Price/Unit (₹)', 'Amount (₹)', 'Time']
             
             st.dataframe(display_df, use_container_width=True, hide_index=True)
             
@@ -167,7 +176,7 @@ if page == "Today's Operations":
                 delete_idx = st.selectbox(
                     "Select a transaction to delete:",
                     range(len(st.session_state.today_data['purchase'])),
-                    format_func=lambda x: f"{st.session_state.today_data['purchase'][x]['farmer_name']} ({st.session_state.today_data['purchase'][x]['farmer_phone']}) - {st.session_state.today_data['purchase'][x]['total_weight']:.2f}kg",
+                    format_func=lambda x: f"{st.session_state.today_data['purchase'][x]['farmer_name']} ({st.session_state.today_data['purchase'][x]['farmer_phone']}) - {st.session_state.today_data['purchase'][x].get('total_weight', st.session_state.today_data['purchase'][x].get('quantity', 0)):.2f}kg",
                     key="delete_purchase_idx"
                 )
                 if st.button("🗑️ Delete Purchase Transaction", key="btn_del_purchase"):
@@ -258,10 +267,17 @@ if page == "Today's Operations":
             st.markdown("### 📋 Today's Exports/Sales")
             export_df = pd.DataFrame(st.session_state.today_data['export'])
             
-            # Reorder columns for better display
-            display_cols = ['exporter_name', 'exporter_phone', 'mirchi_grade', 'num_bags', 'weight_per_bag', 'total_weight', 'price_per_kg', 'amount', 'timestamp']
-            display_df = export_df[display_cols].copy()
-            display_df.columns = ['Name', 'Phone', 'Grade', 'Bags', 'Wt/Bag (kg)', 'Total Wt (kg)', 'Price/kg (₹)', 'Amount (₹)', 'Time']
+            # Check if new format (has mirchi_grade) or old format (has quantity)
+            if 'mirchi_grade' in export_df.columns:
+                # New format
+                display_cols = ['exporter_name', 'exporter_phone', 'mirchi_grade', 'num_bags', 'weight_per_bag', 'total_weight', 'price_per_kg', 'amount', 'timestamp']
+                display_df = export_df[display_cols].copy()
+                display_df.columns = ['Name', 'Phone', 'Grade', 'Bags', 'Wt/Bag (kg)', 'Total Wt (kg)', 'Price/kg (₹)', 'Amount (₹)', 'Time']
+            else:
+                # Old format fallback
+                display_cols = ['exporter_name', 'exporter_phone', 'quantity', 'price_per_unit', 'amount', 'timestamp']
+                display_df = export_df[display_cols].copy()
+                display_df.columns = ['Name', 'Phone', 'Qty (kg)', 'Price/Unit (₹)', 'Amount (₹)', 'Time']
             
             st.dataframe(display_df, use_container_width=True, hide_index=True)
             
@@ -271,7 +287,7 @@ if page == "Today's Operations":
                 delete_idx = st.selectbox(
                     "Select a transaction to delete:",
                     range(len(st.session_state.today_data['export'])),
-                    format_func=lambda x: f"{st.session_state.today_data['export'][x]['exporter_name']} ({st.session_state.today_data['export'][x]['exporter_phone']}) - {st.session_state.today_data['export'][x]['total_weight']:.2f}kg",
+                    format_func=lambda x: f"{st.session_state.today_data['export'][x]['exporter_name']} ({st.session_state.today_data['export'][x]['exporter_phone']}) - {st.session_state.today_data['export'][x].get('total_weight', st.session_state.today_data['export'][x].get('quantity', 0)):.2f}kg",
                     key="delete_export_idx"
                 )
                 if st.button("🗑️ Delete Export Transaction", key="btn_del_export"):
@@ -335,9 +351,18 @@ elif page == "Daily Summary":
                 if summary['purchase']['transaction_count'] > 0:
                     data = load_data_for_date(selected_date)
                     purchase_df = pd.DataFrame(data['purchase'])
-                    display_cols = ['farmer_name', 'farmer_phone', 'mirchi_grade', 'total_weight', 'amount']
-                    display_df = purchase_df[display_cols].copy()
-                    display_df.columns = ['Farmer', 'Phone', 'Grade', 'Wt (kg)', 'Amount (₹)']
+                    
+                    # Check if new format (has mirchi_grade) or old format (has quantity)
+                    if 'mirchi_grade' in purchase_df.columns:
+                        display_cols = ['farmer_name', 'farmer_phone', 'mirchi_grade', 'total_weight', 'amount']
+                        display_df = purchase_df[display_cols].copy()
+                        display_df.columns = ['Farmer', 'Phone', 'Grade', 'Wt (kg)', 'Amount (₹)']
+                    else:
+                        # Old format fallback
+                        display_cols = ['farmer_name', 'farmer_phone', 'quantity', 'amount']
+                        display_df = purchase_df[display_cols].copy()
+                        display_df.columns = ['Farmer', 'Phone', 'Qty (kg)', 'Amount (₹)']
+                    
                     st.dataframe(display_df, use_container_width=True, hide_index=True)
                 else:
                     st.info("No purchase transactions")
@@ -347,9 +372,18 @@ elif page == "Daily Summary":
                 if summary['export']['transaction_count'] > 0:
                     data = load_data_for_date(selected_date)
                     export_df = pd.DataFrame(data['export'])
-                    display_cols = ['exporter_name', 'exporter_phone', 'mirchi_grade', 'total_weight', 'amount']
-                    display_df = export_df[display_cols].copy()
-                    display_df.columns = ['Buyer/Exporter', 'Phone', 'Grade', 'Wt (kg)', 'Amount (₹)']
+                    
+                    # Check if new format (has mirchi_grade) or old format (has quantity)
+                    if 'mirchi_grade' in export_df.columns:
+                        display_cols = ['exporter_name', 'exporter_phone', 'mirchi_grade', 'total_weight', 'amount']
+                        display_df = export_df[display_cols].copy()
+                        display_df.columns = ['Buyer/Exporter', 'Phone', 'Grade', 'Wt (kg)', 'Amount (₹)']
+                    else:
+                        # Old format fallback
+                        display_cols = ['exporter_name', 'exporter_phone', 'quantity', 'amount']
+                        display_df = export_df[display_cols].copy()
+                        display_df.columns = ['Buyer/Exporter', 'Phone', 'Qty (kg)', 'Amount (₹)']
+                    
                     st.dataframe(display_df, use_container_width=True, hide_index=True)
                 else:
                     st.info("No export transactions")

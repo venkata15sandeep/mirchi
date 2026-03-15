@@ -30,7 +30,38 @@ def load_today_data():
     
     if os.path.exists(filename):
         with open(filename, 'r') as f:
-            return json.load(f)
+            data = json.load(f)
+            
+        # Migrate old data format to new format
+        if 'chilly_price' in data and 'grade_prices' not in data:
+            # Old format - convert to new format
+            old_price = data.pop('chilly_price', 0.0)
+            data['grade_prices'] = {
+                "Grade 1": old_price,
+                "Grade 2": old_price,
+                "Grade 3": old_price,
+                "Grade 4": old_price,
+                "Grade 5": old_price
+            }
+        
+        # Ensure grade_prices exists
+        if 'grade_prices' not in data:
+            data['grade_prices'] = {
+                "Grade 1": 0.0,
+                "Grade 2": 0.0,
+                "Grade 3": 0.0,
+                "Grade 4": 0.0,
+                "Grade 5": 0.0
+            }
+        
+        # Ensure purchase and export lists exist
+        if 'purchase' not in data:
+            data['purchase'] = []
+        if 'export' not in data:
+            data['export'] = []
+            
+        return data
+    
     return {
         "grade_prices": {
             "Grade 1": 0.0,
@@ -62,7 +93,31 @@ def load_data_for_date(date_str):
     filename = os.path.join(DATA_DIR, f"{date_str}.json")
     if os.path.exists(filename):
         with open(filename, 'r') as f:
-            return json.load(f)
+            data = json.load(f)
+        
+        # Migrate old data format to new format
+        if 'chilly_price' in data and 'grade_prices' not in data:
+            # Old format - convert to new format
+            old_price = data.pop('chilly_price', 0.0)
+            data['grade_prices'] = {
+                "Grade 1": old_price,
+                "Grade 2": old_price,
+                "Grade 3": old_price,
+                "Grade 4": old_price,
+                "Grade 5": old_price
+            }
+        
+        # Ensure grade_prices exists
+        if 'grade_prices' not in data:
+            data['grade_prices'] = {
+                "Grade 1": 0.0,
+                "Grade 2": 0.0,
+                "Grade 3": 0.0,
+                "Grade 4": 0.0,
+                "Grade 5": 0.0
+            }
+        
+        return data
     return None
 
 def calculate_amount(total_weight, price_per_kg):
@@ -85,13 +140,21 @@ def get_consolidated_summary(date_str):
     if not data:
         return None
     
-    # Calculate purchase totals
-    total_quantity_purchased = sum(item['total_weight'] for item in data['purchase'])
-    total_amount_paid = sum(item['amount'] for item in data['purchase'])
+    # Calculate purchase totals (handle both old and new formats)
+    total_quantity_purchased = 0
+    for item in data['purchase']:
+        # Handle both old format (quantity) and new format (total_weight)
+        total_quantity_purchased += item.get('total_weight', item.get('quantity', 0))
     
-    # Calculate export totals
-    total_quantity_exported = sum(item['total_weight'] for item in data['export'])
-    total_amount_received = sum(item['amount'] for item in data['export'])
+    total_amount_paid = sum(item.get('amount', 0) for item in data['purchase'])
+    
+    # Calculate export totals (handle both old and new formats)
+    total_quantity_exported = 0
+    for item in data['export']:
+        # Handle both old format (quantity) and new format (total_weight)
+        total_quantity_exported += item.get('total_weight', item.get('quantity', 0))
+    
+    total_amount_received = sum(item.get('amount', 0) for item in data['export'])
     
     return {
         "date": date_str,

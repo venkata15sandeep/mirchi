@@ -2,19 +2,25 @@
     "purchase": [
         {
             "farmer_name": "tarun",
-            "farmer_phone": "8374652875",
-            "quantity": 100.0,
-            "price_per_unit": 40.5,
-            "amount": 4050.0,
-            "timestamp": "17:21:05"
+            "farmer_phone": "7780284026",
+            "mirchi_grade": "Grade 5",
+            "num_bags": 1,
+            "weight_per_bag": 40.0,
+            "total_weight": 40.0,
+            "price_per_kg": 40.5,
+            "amount": 1620.0,
+            "timestamp": "18:16:00"
         },
         {
-            "farmer_name": "sandeep",
-            "farmer_phone": "8376652875",
-            "quantity": 100.0,
-            "price_per_unit": 40.5,
-            "amount": 4050.0,
-            "timestamp": "17:21:31"
+            "farmer_name": "tarun",
+            "farmer_phone": "7780284026",
+            "mirchi_grade": "Grade 5",
+            "num_bags": 1,
+            "weight_per_bag": 45.0,
+            "total_weight": 45.0,
+            "price_per_kg": 40.5,
+            "amount": 1822.5,
+            "timestamp": "18:16:10"
         }
     ],
     "export": [
@@ -27,5 +33,11 @@
             "timestamp": "17:22:16"
         }
     ],
-    "chilly_price": 40.5
+    "grade_prices": {
+        "Grade 1": 40.5,
+        "Grade 2": 40.5,
+        "Grade 3": 40.5,
+        "Grade 4": 40.5,
+        "Grade 5": 40.5
+    }
 }
