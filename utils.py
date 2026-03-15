@@ -4,6 +4,15 @@ from datetime import datetime
 
 DATA_DIR = "data"
 
+# Grade definitions
+GRADES = {
+    "Grade 1": "Grade 1 - Premium",
+    "Grade 2": "Grade 2 - High Quality",
+    "Grade 3": "Grade 3 - Medium Quality",
+    "Grade 4": "Grade 4 - Standard",
+    "Grade 5": "Grade 5 - Economy"
+}
+
 def ensure_data_directory():
     """Create data directory if it doesn't exist."""
     if not os.path.exists(DATA_DIR):
@@ -23,9 +32,15 @@ def load_today_data():
         with open(filename, 'r') as f:
             return json.load(f)
     return {
+        "grade_prices": {
+            "Grade 1": 0.0,
+            "Grade 2": 0.0,
+            "Grade 3": 0.0,
+            "Grade 4": 0.0,
+            "Grade 5": 0.0
+        },
         "purchase": [],
-        "export": [],
-        "chilly_price": 0.0
+        "export": []
     }
 
 def save_today_data(data):
@@ -38,7 +53,7 @@ def save_today_data(data):
 def get_all_dates():
     """Get all available dates with data."""
     ensure_data_directory()
-    files = [f for f in os.listdir(DATA_DIR) if f.endswith('.json')]
+    files = [f for f in os.listdir(DATA_DIR) if f.endswith('.json') and f != 'SAMPLE_DATA_STRUCTURE.json']
     dates = [f.replace('.json', '') for f in sorted(files, reverse=True)]
     return dates
 
@@ -50,9 +65,19 @@ def load_data_for_date(date_str):
             return json.load(f)
     return None
 
-def calculate_amount(quantity, price):
+def calculate_amount(total_weight, price_per_kg):
     """Calculate amount with 2 decimal places."""
-    return round(quantity * price, 2)
+    return round(total_weight * price_per_kg, 2)
+
+def get_farmer_transactions(data, farmer_phone):
+    """Get all transactions for a specific farmer by phone number."""
+    transactions = [t for t in data['purchase'] if t['farmer_phone'] == farmer_phone]
+    return transactions
+
+def get_exporter_transactions(data, exporter_phone):
+    """Get all transactions for a specific exporter by phone number."""
+    transactions = [t for t in data['export'] if t['exporter_phone'] == exporter_phone]
+    return transactions
 
 def get_consolidated_summary(date_str):
     """Get daily consolidated summary for a specific date."""
@@ -61,16 +86,16 @@ def get_consolidated_summary(date_str):
         return None
     
     # Calculate purchase totals
-    total_quantity_purchased = sum(item['quantity'] for item in data['purchase'])
+    total_quantity_purchased = sum(item['total_weight'] for item in data['purchase'])
     total_amount_paid = sum(item['amount'] for item in data['purchase'])
     
     # Calculate export totals
-    total_quantity_exported = sum(item['quantity'] for item in data['export'])
+    total_quantity_exported = sum(item['total_weight'] for item in data['export'])
     total_amount_received = sum(item['amount'] for item in data['export'])
     
     return {
         "date": date_str,
-        "chilly_price": data.get('chilly_price', 0.0),
+        "grade_prices": data.get('grade_prices', {}),
         "purchase": {
             "total_quantity": total_quantity_purchased,
             "total_amount": total_amount_paid,

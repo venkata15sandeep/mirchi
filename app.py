@@ -3,7 +3,8 @@ import pandas as pd
 from datetime import datetime
 from utils import (
     load_today_data, save_today_data, calculate_amount,
-    get_all_dates, load_data_for_date, get_consolidated_summary
+    get_all_dates, load_data_for_date, get_consolidated_summary,
+    GRADES, get_farmer_transactions, get_exporter_transactions
 )
 
 # Page configuration
@@ -50,71 +51,103 @@ if page == "Today's Operations":
     today_date = datetime.now().strftime("%Y-%m-%d")
     st.write(f"**Date:** {today_date}")
     
-    # Set chilly price for the day
-    st.markdown("### 💰 Set Today's Chilly Price")
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        chilly_price = st.number_input(
-            "Price per unit (₹):",
-            value=st.session_state.today_data.get('chilly_price', 0.0),
-            min_value=0.0,
-            step=0.01,
-            format="%.2f"
-        )
-        st.session_state.today_data['chilly_price'] = chilly_price
+    # Set chilly prices for each grade
+    st.markdown("### 💰 Set Today's Chilly Prices by Grade")
     
-    with col2:
-        st.info(f"✓ Current price: ₹{chilly_price:.2f} per unit")
+    price_cols = st.columns(5)
+    
+    for idx, (grade, description) in enumerate(GRADES.items()):
+        with price_cols[idx]:
+            grade_price = st.number_input(
+                f"{grade} (₹/kg):",
+                value=st.session_state.today_data['grade_prices'].get(grade, 0.0),
+                min_value=0.0,
+                step=0.01,
+                format="%.2f",
+                key=f"grade_price_{grade}"
+            )
+            st.session_state.today_data['grade_prices'][grade] = grade_price
+    
+    # Display prices summary
+    st.markdown("**Prices Set for Today:**")
+    prices_display = []
+    for grade, price in st.session_state.today_data['grade_prices'].items():
+        prices_display.append(f"{grade}: ₹{price:.2f}/kg")
+    st.info(" | ".join(prices_display))
     
     # Create tabs for Purchase and Export flows
     tab1, tab2 = st.tabs(["🛒 Purchase from Farmers", "📦 Export/Sales"])
     
     # ========== PURCHASE TAB ==========
     with tab1:
-        st.markdown("### Add Purchase Transaction")
+        st.markdown("### Add Purchase Transaction from Farmer")
         
         purchase_col1, purchase_col2 = st.columns(2)
         with purchase_col1:
             farmer_name = st.text_input("Farmer Name", key="farmer_name")
-            quantity = st.number_input(
-                "Quantity (kg):",
+            farmer_phone = st.text_input("Farmer Phone Number (Primary Key)", key="farmer_phone", placeholder="Unique identifier for farmer")
+        
+        with purchase_col2:
+            mirchi_grade = st.selectbox(
+                "Select Mirchi Grade:",
+                list(GRADES.keys()),
+                key="purchase_grade"
+            )
+            
+            # Display price for selected grade
+            grade_price = st.session_state.today_data['grade_prices'].get(mirchi_grade, 0.0)
+            st.info(f"💰 Price for {mirchi_grade}: ₹{grade_price:.2f}/kg")
+        
+        # Bags and weight info
+        purchase_col3, purchase_col4 = st.columns(2)
+        with purchase_col3:
+            num_bags = st.number_input(
+                "Number of Bags:",
+                value=1,
+                min_value=1,
+                step=1,
+                key="purchase_num_bags"
+            )
+        
+        with purchase_col4:
+            weight_per_bag = st.number_input(
+                "Weight per Bag (kg):",
                 value=0.0,
                 min_value=0.0,
                 step=0.01,
-                key="purchase_qty"
+                key="purchase_weight_per_bag",
+                format="%.2f"
             )
         
-        with purchase_col2:
-            farmer_phone = st.text_input("Farmer Phone Number", key="farmer_phone")
-            # Auto-calculate amount based on quantity and chilly price
-            amount = calculate_amount(quantity, chilly_price)
-            st.number_input(
-                "Amount to Pay (₹):",
-                value=amount,
-                disabled=True,
-                format="%.2f",
-                key="purchase_amount_display"
-            )
+        # Calculate totals
+        total_weight = num_bags * weight_per_bag
+        amount = calculate_amount(total_weight, grade_price)
         
-        # Add manual override for amount if needed
-        st.info("💡 Amount is automatically calculated based on quantity × today's price. Edit quantity to adjust amount.")
+        display_col1, display_col2 = st.columns(2)
+        with display_col1:
+            st.metric("Total Weight (kg)", f"{total_weight:.2f}")
+        with display_col2:
+            st.metric("Amount to Pay (₹)", f"₹{amount:.2f}")
         
         if st.button("✅ Add Purchase", key="btn_add_purchase"):
-            if farmer_name and farmer_phone and quantity > 0:
+            if farmer_name and farmer_phone and total_weight > 0:
                 new_purchase = {
                     "farmer_name": farmer_name,
                     "farmer_phone": farmer_phone,
-                    "quantity": quantity,
-                    "price_per_unit": chilly_price,
+                    "mirchi_grade": mirchi_grade,
+                    "num_bags": num_bags,
+                    "weight_per_bag": weight_per_bag,
+                    "total_weight": total_weight,
+                    "price_per_kg": grade_price,
                     "amount": amount,
                     "timestamp": datetime.now().strftime("%H:%M:%S")
                 }
                 st.session_state.today_data['purchase'].append(new_purchase)
                 save_today_data(st.session_state.today_data)
-                st.success(f"✓ Added purchase from {farmer_name} - {quantity} kg")
+                st.success(f"✓ Added purchase from {farmer_name} ({farmer_phone}) - {num_bags} bags × {weight_per_bag}kg = {total_weight:.2f}kg")
                 st.rerun()
             else:
-                st.error("⚠️ Please fill all fields and ensure quantity > 0")
+                st.error("⚠️ Please fill all fields and ensure weight > 0")
         
         # Display purchase transactions
         if st.session_state.today_data['purchase']:
@@ -122,9 +155,9 @@ if page == "Today's Operations":
             purchase_df = pd.DataFrame(st.session_state.today_data['purchase'])
             
             # Reorder columns for better display
-            display_cols = ['farmer_name', 'farmer_phone', 'quantity', 'price_per_unit', 'amount', 'timestamp']
+            display_cols = ['farmer_name', 'farmer_phone', 'mirchi_grade', 'num_bags', 'weight_per_bag', 'total_weight', 'price_per_kg', 'amount', 'timestamp']
             display_df = purchase_df[display_cols].copy()
-            display_df.columns = ['Farmer Name', 'Phone', 'Quantity (kg)', 'Price/Unit (₹)', 'Amount (₹)', 'Time']
+            display_df.columns = ['Name', 'Phone', 'Grade', 'Bags', 'Wt/Bag (kg)', 'Total Wt (kg)', 'Price/kg (₹)', 'Amount (₹)', 'Time']
             
             st.dataframe(display_df, use_container_width=True, hide_index=True)
             
@@ -134,7 +167,7 @@ if page == "Today's Operations":
                 delete_idx = st.selectbox(
                     "Select a transaction to delete:",
                     range(len(st.session_state.today_data['purchase'])),
-                    format_func=lambda x: f"{st.session_state.today_data['purchase'][x]['farmer_name']} - {st.session_state.today_data['purchase'][x]['quantity']} kg",
+                    format_func=lambda x: f"{st.session_state.today_data['purchase'][x]['farmer_name']} ({st.session_state.today_data['purchase'][x]['farmer_phone']}) - {st.session_state.today_data['purchase'][x]['total_weight']:.2f}kg",
                     key="delete_purchase_idx"
                 )
                 if st.button("🗑️ Delete Purchase Transaction", key="btn_del_purchase"):
@@ -145,57 +178,80 @@ if page == "Today's Operations":
     
     # ========== EXPORT TAB ==========
     with tab2:
-        st.markdown("### Add Export/Sales Transaction")
+        st.markdown("### Add Export/Sales Transaction to Buyer")
         
         export_col1, export_col2 = st.columns(2)
         with export_col1:
-            exporter_name = st.text_input("Exporter/Buyer Name", key="exporter_name")
-            export_quantity = st.number_input(
-                "Quantity (kg):",
-                value=0.0,
-                min_value=0.0,
-                step=0.01,
-                key="export_qty"
-            )
+            exporter_name = st.text_input("Buyer/Exporter Name", key="exporter_name")
+            exporter_phone = st.text_input("Buyer/Exporter Phone Number (Primary Key)", key="exporter_phone", placeholder="Unique identifier for buyer")
         
         with export_col2:
-            exporter_phone = st.text_input("Exporter/Buyer Phone Number", key="exporter_phone")
+            export_grade = st.selectbox(
+                "Select Mirchi Grade:",
+                list(GRADES.keys()),
+                key="export_grade"
+            )
+            
             # Allow custom price for export if different from purchase price
             export_price = st.number_input(
-                "Price per Unit (₹):",
-                value=chilly_price,
+                f"Price for {export_grade} (₹/kg):",
+                value=st.session_state.today_data['grade_prices'].get(export_grade, 0.0),
                 min_value=0.0,
                 step=0.01,
                 format="%.2f",
                 key="export_price"
             )
         
-        # Calculate export amount
-        export_amount = calculate_amount(export_quantity, export_price)
-        st.number_input(
-            "Amount Received (₹):",
-            value=export_amount,
-            disabled=True,
-            format="%.2f",
-            key="export_amount_display"
-        )
+        # Bags and weight info
+        export_col3, export_col4 = st.columns(2)
+        with export_col3:
+            export_num_bags = st.number_input(
+                "Number of Bags:",
+                value=1,
+                min_value=1,
+                step=1,
+                key="export_num_bags"
+            )
+        
+        with export_col4:
+            export_weight_per_bag = st.number_input(
+                "Weight per Bag (kg):",
+                value=0.0,
+                min_value=0.0,
+                step=0.01,
+                key="export_weight_per_bag",
+                format="%.2f"
+            )
+        
+        # Calculate totals
+        export_total_weight = export_num_bags * export_weight_per_bag
+        export_amount = calculate_amount(export_total_weight, export_price)
+        
+        export_display_col1, export_display_col2 = st.columns(2)
+        with export_display_col1:
+            st.metric("Total Weight (kg)", f"{export_total_weight:.2f}")
+        with export_display_col2:
+            st.metric("Amount Received (₹)", f"₹{export_amount:.2f}")
         
         if st.button("✅ Add Export/Sale", key="btn_add_export"):
-            if exporter_name and exporter_phone and export_quantity > 0:
+            if exporter_name and exporter_phone and export_total_weight > 0:
                 new_export = {
                     "exporter_name": exporter_name,
                     "exporter_phone": exporter_phone,
-                    "quantity": export_quantity,
-                    "price_per_unit": export_price,
+                    "mirchi_grade": export_grade,
+                    "num_bags": export_num_bags,
+                    "weight_per_bag": export_weight_per_bag,
+                    "total_weight": export_total_weight,
+                    "price_per_kg": export_price,
                     "amount": export_amount,
                     "timestamp": datetime.now().strftime("%H:%M:%S")
                 }
                 st.session_state.today_data['export'].append(new_export)
                 save_today_data(st.session_state.today_data)
-                st.success(f"✓ Added export to {exporter_name} - {export_quantity} kg")
+                st.success(f"✓ Added export to {exporter_name} ({exporter_phone}) - {export_num_bags} bags × {export_weight_per_bag}kg = {export_total_weight:.2f}kg")
                 st.rerun()
             else:
-                st.error("⚠️ Please fill all fields and ensure quantity > 0")
+                st.error("⚠️ Please fill all fields and ensure weight > 0")
         
         # Display export transactions
         if st.session_state.today_data['export']:
@@ -203,9 +259,9 @@ if page == "Today's Operations":
             export_df = pd.DataFrame(st.session_state.today_data['export'])
             
             # Reorder columns for better display
-            display_cols = ['exporter_name', 'exporter_phone', 'quantity', 'price_per_unit', 'amount', 'timestamp']
+            display_cols = ['exporter_name', 'exporter_phone', 'mirchi_grade', 'num_bags', 'weight_per_bag', 'total_weight', 'price_per_kg', 'amount', 'timestamp']
             display_df = export_df[display_cols].copy()
-            display_df.columns = ['Exporter/Buyer', 'Phone', 'Quantity (kg)', 'Price/Unit (₹)', 'Amount (₹)', 'Time']
+            display_df.columns = ['Name', 'Phone', 'Grade', 'Bags', 'Wt/Bag (kg)', 'Total Wt (kg)', 'Price/kg (₹)', 'Amount (₹)', 'Time']
             
             st.dataframe(display_df, use_container_width=True, hide_index=True)
             
@@ -215,7 +271,7 @@ if page == "Today's Operations":
                 delete_idx = st.selectbox(
                     "Select a transaction to delete:",
                     range(len(st.session_state.today_data['export'])),
-                    format_func=lambda x: f"{st.session_state.today_data['export'][x]['exporter_name']} - {st.session_state.today_data['export'][x]['quantity']} kg",
+                    format_func=lambda x: f"{st.session_state.today_data['export'][x]['exporter_name']} ({st.session_state.today_data['export'][x]['exporter_phone']}) - {st.session_state.today_data['export'][x]['total_weight']:.2f}kg",
                     key="delete_export_idx"
                 )
                 if st.button("🗑️ Delete Export Transaction", key="btn_del_export"):
@@ -279,9 +335,9 @@ elif page == "Daily Summary":
                 if summary['purchase']['transaction_count'] > 0:
                     data = load_data_for_date(selected_date)
                     purchase_df = pd.DataFrame(data['purchase'])
-                    display_cols = ['farmer_name', 'farmer_phone', 'quantity', 'amount']
+                    display_cols = ['farmer_name', 'farmer_phone', 'mirchi_grade', 'total_weight', 'amount']
                     display_df = purchase_df[display_cols].copy()
-                    display_df.columns = ['Farmer', 'Phone', 'Qty (kg)', 'Amount (₹)']
+                    display_df.columns = ['Farmer', 'Phone', 'Grade', 'Wt (kg)', 'Amount (₹)']
                     st.dataframe(display_df, use_container_width=True, hide_index=True)
                 else:
                     st.info("No purchase transactions")
@@ -291,9 +347,9 @@ elif page == "Daily Summary":
                 if summary['export']['transaction_count'] > 0:
                     data = load_data_for_date(selected_date)
                     export_df = pd.DataFrame(data['export'])
-                    display_cols = ['exporter_name', 'exporter_phone', 'quantity', 'amount']
+                    display_cols = ['exporter_name', 'exporter_phone', 'mirchi_grade', 'total_weight', 'amount']
                     display_df = export_df[display_cols].copy()
-                    display_df.columns = ['Exporter', 'Phone', 'Qty (kg)', 'Amount (₹)']
+                    display_df.columns = ['Buyer/Exporter', 'Phone', 'Grade', 'Wt (kg)', 'Amount (₹)']
                     st.dataframe(display_df, use_container_width=True, hide_index=True)
                 else:
                     st.info("No export transactions")
