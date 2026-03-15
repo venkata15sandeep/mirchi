@@ -1,0 +1,31 @@
+{
+    "purchase": [
+        {
+            "farmer_name": "tarun",
+            "farmer_phone": "8374652875",
+            "quantity": 100.0,
+            "price_per_unit": 40.5,
+            "amount": 4050.0,
+            "timestamp": "17:21:05"
+        },
+        {
+            "farmer_name": "sandeep",
+            "farmer_phone": "8376652875",
+            "quantity": 100.0,
+            "price_per_unit": 40.5,
+            "amount": 4050.0,
+            "timestamp": "17:21:31"
+        }
+    ],
+    "export": [
+        {
+            "exporter_name": "vvn traders",
+            "exporter_phone": "783782748",
+            "quantity": 200.0,
+            "price_per_unit": 50.0,
+            "amount": 10000.0,
+            "timestamp": "17:22:16"
+        }
+    ],
+    "chilly_price": 40.5
+}
